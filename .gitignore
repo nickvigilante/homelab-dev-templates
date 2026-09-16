@@ -1,0 +1,13 @@
+# Terraform
+**/.terraform/
+*.tfplan
+crash.log
+crash.*.log
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
