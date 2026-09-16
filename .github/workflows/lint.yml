@@ -20,6 +20,7 @@ jobs:
           set -euo pipefail
           pip install pre-commit yamllint==1.35.1
           go install github.com/google/yamlfmt/cmd/yamlfmt@v0.21.0
+          go install mvdan.cc/sh/v3/cmd/shfmt@v3.14.1
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - uses: actions/setup-go@v5
       - name: Install hadolint
