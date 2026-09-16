@@ -1,0 +1,73 @@
+name: image-build
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.filter.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            image:
+              - 'images/base/**'
+              - '.github/workflows/image-build.yml'
+
+  validate:
+    name: validate (build only, both platforms)
+    needs: changes
+    if: needs.changes.outputs.image == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: images/base
+          platforms: linux/amd64,linux/arm64
+          push: false
+          tags: base:pr-validate
+          outputs: type=oci,dest=/tmp/base-image.tar
+      - name: Smoke test — confirm the arm64 image actually boots
+        run: |
+          set -euo pipefail
+          docker buildx build --platform linux/arm64 \
+            --load -t base:arm64-smoke images/base
+          docker run --rm --platform linux/arm64 base:arm64-smoke uname -m
+
+  publish:
+    name: publish (main only)
+    needs: changes
+    if: github.event_name == 'push' && needs.changes.outputs.image == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: images/base
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/nickvigilante/homelab-dev-templates:${{ github.sha }}
+            ghcr.io/nickvigilante/homelab-dev-templates:latest
