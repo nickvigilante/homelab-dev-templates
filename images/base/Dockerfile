@@ -22,6 +22,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # hadolint ignore=DL3066
 USER coder
 WORKDIR /home/coder
+# Docker's USER directive only changes the effective UID for RUN/CMD; unlike
+# a real login shell (PAM/pam_env), it does not export $USER. dotfiles'
+# run_once_08-set-default-shell.sh.tmpl reads $USER under `set -u`, so
+# without this it fails the build with "USER: unbound variable" (hit on the
+# first CI run of this Dockerfile).
+ENV USER=coder
 
 # Install Homebrew (linuxbrew) non-interactively, matching how gandalf
 # itself is provisioned.
