@@ -6,7 +6,7 @@ FROM codercom/example-base:ubuntu
 # dotfiles change; pin to a commit SHA per-build via
 # `--build-arg DOTFILES_REF=<sha>` when a specific reproducible pin matters
 # (e.g. from CI).
-ARG DOTFILES_REF=main
+ARG DOTFILES_REF=5d8e28a7a21eb8c335a56cbc0b4a56c2d78fa0fd
 
 # hadolint ignore=DL3066
 USER root
