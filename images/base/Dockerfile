@@ -1,26 +1,72 @@
 # syntax=docker/dockerfile:1
 FROM codercom/example-base:ubuntu
 
-# Branch, tag, or commit SHA in nickvigilante/dotfiles to bake in. Pinned to
-# the squash-merge commit of dotfiles#65 (the Brewfile per-package-install
-# fallback fix, confirmed by a real image build to resolve the earlier
-# "only git gets installed" bug) on dotfiles' main branch — not that PR's
-# now-deleted branch-tip commit, which becomes unreachable after squash-merge
-# cleanup and would break the reproducibility this pin exists for. Re-pin to
-# a newer commit SHA per-build via `--build-arg DOTFILES_REF=<sha>` when a
-# specific reproducible pin matters (e.g. from CI).
-ARG DOTFILES_REF=7a8c516206c2abcb60d1dccf94138ad6436ad736
+# Branch, tag, or commit SHA in nickvigilante/dotfiles to bake in — pin to a
+# specific commit per-build via `--build-arg DOTFILES_REF=<sha>` when
+# reproducibility matters (e.g. from CI). Left at `main` as the default so
+# local iteration doesn't need to know a SHA.
+ARG DOTFILES_REF=main
+
+# Without this, a failed `curl | sh` in any RUN below would exit 0 (only
+# the trailing `sh`'s exit code counts) and silently continue the build on
+# a corrupted/empty install.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # hadolint ignore=DL3066
 USER root
-# Matches nickvigilante/dotfiles' own os/linux/bootstrap.apt prereq list, so
-# the chezmoi run_once_01-install-bootstrap-prereqs.sh.tmpl hook below is a
-# fast no-op instead of a second apt-get pass. codercom/example-base:ubuntu
-# already ships curl/git/build-essential but not zsh/gnupg/lsb-release.
+# Matches nickvigilante/dotfiles' own os/linux/bootstrap.apt prereq list
+# (curl/git already ship in codercom/example-base:ubuntu, but zsh/gnupg/
+# lsb-release don't), so the chezmoi run_once_01-install-bootstrap-
+# prereqs.sh.tmpl hook further down is a fast no-op instead of a second
+# apt-get pass. tmux and fish are here (not fetched as static binaries)
+# because neither project publishes standalone release binaries. zstd is
+# required by ollama's own installer for extraction (hit on the first CI
+# run of this Dockerfile — the installer fails loudly if it's missing
+# rather than falling back to another extractor).
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl git zsh build-essential file procps gnupg lsb-release \
+      tmux fish zstd \
     && rm -rf /var/lib/apt/lists/*
+
+# ── CLI tools with their own official multi-arch installer script ──────────
+# Preferred over tools.txt's generic GitHub-release fetch wherever the
+# project ships one — a maintained installer handles arch detection more
+# robustly than hand-written asset-name patterns.
+RUN curl -fsSL get.chezmoi.io | sh -s -- -b /usr/local/bin
+RUN curl -sS https://starship.rs/install.sh | sh -s -- -y --bin-dir /usr/local/bin
+RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
+      | bash -s -- --to /usr/local/bin
+RUN curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh \
+      | bash -s -- --bin-dir /usr/local/bin
+# uv's installer defaults to $HOME/.local/bin; UV_INSTALL_DIR redirects it to
+# a location already on PATH for every user. UV_TOOL_BIN_DIR does the same
+# for `uv tool install` shims (used for ruff below). UV_TOOL_DIR also needs
+# redirecting, separately from the shim — it's where the actual tool
+# environment lives, and left at its default it lands under $HOME (/root,
+# since this all runs before USER coder below), which apt/Debian creates
+# mode 0700: the coder user can create the /usr/local/bin/ruff shim but
+# can't traverse into /root to reach what it points at ("Permission
+# denied", not a missing +x bit — the same class of bug fixed for eza in
+# install-tools.sh, different root cause here).
+ENV UV_INSTALL_DIR=/usr/local/bin
+ENV UV_TOOL_BIN_DIR=/usr/local/bin
+ENV UV_TOOL_DIR=/opt/uv-tools
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+RUN uv tool install ruff && chmod -R a+rX "${UV_TOOL_DIR}"
+RUN curl -fsSL https://ollama.com/install.sh | sh
+
+# ── CLI tools fetched as prebuilt binaries from their latest GitHub release ─
+# See tools.txt for the list + per-tool asset-name pattern, and
+# install-tools.sh for the fetch/install logic. Needs GITHUB_TOKEN (mounted
+# as a BuildKit secret, never baked into an image layer) — anonymous GitHub
+# API requests are capped at 60/hour per IP, which GitHub Actions runners
+# routinely share and exhaust; authenticated requests get 5000/hour.
+COPY tools.txt install-tools.sh /tmp/
+RUN --mount=type=secret,id=github_token \
+    sh -c 'export GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)"; \
+           chmod +x /tmp/install-tools.sh && /tmp/install-tools.sh /tmp/tools.txt' \
+    && rm -f /tmp/tools.txt /tmp/install-tools.sh
 
 # hadolint ignore=DL3066
 USER coder
@@ -28,17 +74,8 @@ WORKDIR /home/coder
 # Docker's USER directive only changes the effective UID for RUN/CMD; unlike
 # a real login shell (PAM/pam_env), it does not export $USER. dotfiles'
 # run_once_08-set-default-shell.sh.tmpl reads $USER under `set -u`, so
-# without this it fails the build with "USER: unbound variable" (hit on the
-# first CI run of this Dockerfile).
+# without this the build fails with "USER: unbound variable".
 ENV USER=coder
-
-# Install Homebrew (linuxbrew) non-interactively, matching how gandalf
-# itself is provisioned.
-ENV NONINTERACTIVE=1
-RUN /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-ENV PATH="/home/linuxbrew/.linuxbrew/bin:${PATH}"
-
-RUN brew install chezmoi
 
 # ── Mandatory secrets-audit gate — see DOTFILES-AUDIT.md ────────────────────
 # home/.chezmoiignore in nickvigilante/dotfiles excludes the cluster-admin
@@ -47,20 +84,20 @@ RUN brew install chezmoi
 # `.machine == "server"` OR this env var is set (dotfiles PR #64). This image
 # is published *publicly* on GHCR, so DOTFILES_IMAGE_BUILD must be set
 # before chezmoi ever touches the source tree, regardless of the `.machine`
-# value passed below. Verified locally (without Docker) against both states:
-# unset reproduces the live `bw get item 'Homelab Kubeconfig'` fetch attempt;
-# set makes chezmoi report `.kube/homelab.yaml` as ignored and the dry-run
-# apply clean. See DOTFILES-AUDIT.md and the Task 9 report for the full
-# before/after evidence.
+# value passed below. It also gates the always-run package installer
+# (dotfiles PR #71) — package installation is handled entirely above, by
+# this Dockerfile, so that script must not attempt its own (Homebrew-based)
+# install here. See DOTFILES-AUDIT.md and the Task 9 report for the full
+# before/after evidence on the kubeconfig gate.
 ENV DOTFILES_IMAGE_BUILD=1
 
 # Non-interactive chezmoi init+apply. home/.chezmoi.toml.tmpl gates all of
 # its data on promptChoiceOnce/promptStringOnce/promptBoolOnce, which
 # `chezmoi init`'s --promptChoice/--promptString/--promptBool flags satisfy
-# non-interactively — confirmed against dotfiles' own
-# bootstrap/install.sh, which invokes chezmoi exactly this way for its
-# documented non-interactive path. Each flag's key is the prompt's
-# *display text* (e.g. "Profile"), not the underlying data key ("profile").
+# non-interactively — confirmed against dotfiles' own bootstrap/install.sh,
+# which invokes chezmoi exactly this way for its documented non-interactive
+# path. Each flag's key is the prompt's *display text* ("Profile"), not the
+# underlying data key ("profile").
 #
 #   - machine=ephemeral: the dotfiles repo's own designated role for
 #     headless/automated/container builds.
