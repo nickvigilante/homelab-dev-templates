@@ -19,11 +19,14 @@ USER root
 # lsb-release don't), so the chezmoi run_once_01-install-bootstrap-
 # prereqs.sh.tmpl hook further down is a fast no-op instead of a second
 # apt-get pass. tmux and fish are here (not fetched as static binaries)
-# because neither project publishes standalone release binaries.
+# because neither project publishes standalone release binaries. zstd is
+# required by ollama's own installer for extraction (hit on the first CI
+# run of this Dockerfile — the installer fails loudly if it's missing
+# rather than falling back to another extractor).
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl git zsh build-essential file procps gnupg lsb-release \
-      tmux fish \
+      tmux fish zstd \
     && rm -rf /var/lib/apt/lists/*
 
 # ── CLI tools with their own official multi-arch installer script ──────────
