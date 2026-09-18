@@ -1,0 +1,29 @@
+# tools.txt — each tool's latest GitHub Release, fetched at image-build time
+# by install-tools.sh. Format (pipe-separated): binary_name|owner/repo|asset_template
+#
+# Placeholders, substituted per build:
+#   {TAG}         the release's raw tag_name, verbatim (e.g. "v10.5.0" or "15.2.0")
+#   {VER}         {TAG} with any leading "v" stripped (e.g. "10.5.0")
+#   {ARCH_GNU}    x86_64 / aarch64  (ripgrep, fd, bat, delta, eza)
+#   {ARCH_SHORT}  amd64 / arm64    (gh, fzf)
+#   {ARCH_MIXED}  x86_64 / arm64   (lazygit, gum, neovim)
+#
+# Different upstream projects use different arch-naming and versioning
+# conventions in their release asset filenames — verified against each
+# project's actual latest release when this file was written; if a project
+# changes its asset naming, install-tools.sh will fail loudly (404) rather
+# than silently install the wrong thing.
+#
+# Tools with an official one-line multi-arch installer script (chezmoi,
+# starship, uv, just, zoxide, ollama) are installed directly in the
+# Dockerfile instead — no entry needed here.
+rg|BurntSushi/ripgrep|ripgrep-{VER}-{ARCH_GNU}-unknown-linux-musl.tar.gz
+fd|sharkdp/fd|fd-{TAG}-{ARCH_GNU}-unknown-linux-gnu.tar.gz
+eza|eza-community/eza|eza_{ARCH_GNU}-unknown-linux-gnu.tar.gz
+bat|sharkdp/bat|bat-{TAG}-{ARCH_GNU}-unknown-linux-gnu.tar.gz
+gh|cli/cli|gh_{VER}_linux_{ARCH_SHORT}.tar.gz
+delta|dandavison/delta|delta-{VER}-{ARCH_GNU}-unknown-linux-gnu.tar.gz
+lazygit|jesseduffield/lazygit|lazygit_{VER}_linux_{ARCH_MIXED}.tar.gz
+fzf|junegunn/fzf|fzf-{VER}-linux_{ARCH_SHORT}.tar.gz
+gum|charmbracelet/gum|gum_{VER}_Linux_{ARCH_MIXED}.tar.gz
+nvim|neovim/neovim|nvim-linux-{ARCH_MIXED}.tar.gz
