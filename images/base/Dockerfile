@@ -40,13 +40,20 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
 RUN curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh \
       | bash -s -- --bin-dir /usr/local/bin
 # uv's installer defaults to $HOME/.local/bin; UV_INSTALL_DIR redirects it to
-# a location already on PATH for every user, root included. UV_TOOL_BIN_DIR
-# does the same for `uv tool install` shims (used for ruff below), so it
-# works regardless of which user's $HOME is active when it runs.
+# a location already on PATH for every user. UV_TOOL_BIN_DIR does the same
+# for `uv tool install` shims (used for ruff below). UV_TOOL_DIR also needs
+# redirecting, separately from the shim — it's where the actual tool
+# environment lives, and left at its default it lands under $HOME (/root,
+# since this all runs before USER coder below), which apt/Debian creates
+# mode 0700: the coder user can create the /usr/local/bin/ruff shim but
+# can't traverse into /root to reach what it points at ("Permission
+# denied", not a missing +x bit — the same class of bug fixed for eza in
+# install-tools.sh, different root cause here).
 ENV UV_INSTALL_DIR=/usr/local/bin
 ENV UV_TOOL_BIN_DIR=/usr/local/bin
+ENV UV_TOOL_DIR=/opt/uv-tools
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-RUN uv tool install ruff
+RUN uv tool install ruff && chmod -R a+rX "${UV_TOOL_DIR}"
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
 # ── CLI tools fetched as prebuilt binaries from their latest GitHub release ─
