@@ -89,6 +89,15 @@ while IFS='|' read -r name repo template; do
   rm -rf "${install_dir}"
   mkdir -p "$(dirname "${install_dir}")"
   cp -a "${src_tree}" "${install_dir}"
+  # `cp -a` preserves the source's permissions, including on the directory
+  # itself — for a flat-archive tool (e.g. eza) src_tree is the mktemp'd
+  # workdir, which mktemp creates mode 0700 (owner-only). Installed under
+  # root during the image build but executed later as the non-root `coder`
+  # user, a 0700 /opt/<name> silently blocks every non-owner from even
+  # traversing into it ("Permission denied", not a missing +x bit on the
+  # binary itself). Force world-readable+traversable regardless of
+  # whatever the source tree's permissions happened to be.
+  chmod -R a+rX "${install_dir}"
   chmod +x "${install_dir}/${rel_bin}"
   ln -sf "${install_dir}/${rel_bin}" "/usr/local/bin/${name}"
 
