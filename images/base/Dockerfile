@@ -1,12 +1,15 @@
 # syntax=docker/dockerfile:1
 FROM codercom/example-base:ubuntu
 
-# Branch, tag, or commit SHA in nickvigilante/dotfiles to bake in. Left as a
-# floating branch by default so the Dockerfile doesn't need editing on every
-# dotfiles change; pin to a commit SHA per-build via
-# `--build-arg DOTFILES_REF=<sha>` when a specific reproducible pin matters
-# (e.g. from CI).
-ARG DOTFILES_REF=5d8e28a7a21eb8c335a56cbc0b4a56c2d78fa0fd
+# Branch, tag, or commit SHA in nickvigilante/dotfiles to bake in. Pinned to
+# the squash-merge commit of dotfiles#65 (the Brewfile per-package-install
+# fallback fix, confirmed by a real image build to resolve the earlier
+# "only git gets installed" bug) on dotfiles' main branch — not that PR's
+# now-deleted branch-tip commit, which becomes unreachable after squash-merge
+# cleanup and would break the reproducibility this pin exists for. Re-pin to
+# a newer commit SHA per-build via `--build-arg DOTFILES_REF=<sha>` when a
+# specific reproducible pin matters (e.g. from CI).
+ARG DOTFILES_REF=7a8c516206c2abcb60d1dccf94138ad6436ad736
 
 # hadolint ignore=DL3066
 USER root
