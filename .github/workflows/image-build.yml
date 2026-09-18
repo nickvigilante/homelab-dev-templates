@@ -48,6 +48,78 @@ jobs:
           docker buildx build --platform linux/arm64 \
             --load -t base:arm64-smoke images/base
           docker run --rm --platform linux/arm64 base:arm64-smoke uname -m
+      - name: Build amd64 image (loaded) for tool + secrets verification
+        run: |
+          set -euo pipefail
+          docker buildx build --platform linux/amd64 \
+            --load -t base:amd64-smoke images/base
+      - name: Verify baked-in CLI tools landed
+        run: |
+          set -euo pipefail
+          docker run --rm base:amd64-smoke sh -c '
+            set -e
+            rg --version
+            fd --version
+            starship --version
+            bat --version
+            eza --version
+            chezmoi --version
+            which chezmoi
+          '
+      - name: Verify no dotfiles secrets leaked into the image (DOTFILES-AUDIT.md gate)
+        run: |
+          set -euo pipefail
+          echo "== .kube/homelab.yaml (cluster-admin kubeconfig) must not exist =="
+          if docker run --rm base:amd64-smoke sh -c 'test -e "$HOME/.kube/homelab.yaml"'; then
+            echo "::error::homelab.yaml kubeconfig leaked into the image!"
+            exit 1
+          fi
+          echo "OK — absent."
+
+          echo "== ~/.ssh must contain no private key material =="
+          # dotfiles' home/dot_ssh/create_config is expected to land as a
+          # plain-text ~/.ssh/config (client settings only, no keys) — so a
+          # bare "is the directory non-empty" check is too blunt and flags
+          # that benign file. Classify each entry with `file` instead (never
+          # print contents) and only fail on what's actually key material.
+          docker run --rm base:amd64-smoke sh -c '
+            d="$HOME/.ssh"
+            if [ -d "$d" ]; then ls -la "$d"; else echo "(no ~/.ssh directory)"; fi
+          '
+          bad_ssh="$(docker run --rm base:amd64-smoke sh -c '
+            d="$HOME/.ssh"
+            [ -d "$d" ] || exit 0
+            for f in "$d"/*; do
+              [ -f "$f" ] || continue
+              case "$(basename "$f")" in
+                config|config.local|known_hosts|known_hosts.old|authorized_keys|*.pub) continue ;;
+              esac
+              desc="$(file -b "$f")"
+              case "$desc" in
+                *[Pp]rivate\ key*|*OPENSSH*) echo "$(basename "$f"): $desc" ;;
+              esac
+            done
+          ')"
+          if [ -n "$bad_ssh" ]; then
+            echo "::error::Private key material found in ~/.ssh: $bad_ssh"
+            exit 1
+          fi
+          echo "OK — no SSH private key material (benign files only, if any)."
+
+          echo "== ~/.netrc must be empty or absent =="
+          if docker run --rm base:amd64-smoke sh -c 'test -s "$HOME/.netrc"'; then
+            echo "::error::non-empty .netrc found!"
+            exit 1
+          fi
+          echo "OK — no netrc content."
+
+          echo "== no secret-looking environment variables =="
+          leaked_env="$(docker run --rm base:amd64-smoke sh -c 'env' | grep -i -E 'token|secret|password' || true)"
+          if [ -n "$leaked_env" ]; then
+            echo "::error::Secret-looking env vars found: $leaked_env"
+            exit 1
+          fi
+          echo "OK — no secret-looking env vars."
 
   publish:
     name: publish (main only)

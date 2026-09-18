@@ -11,3 +11,6 @@ crash.*.log
 .vscode/
 .idea/
 *.swp
+
+# Git worktrees (per-session isolated branch work)
+.worktrees/
