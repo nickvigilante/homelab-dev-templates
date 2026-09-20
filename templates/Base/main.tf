@@ -268,7 +268,7 @@ resource "kubernetes_deployment_v1" "main" {
 
         container {
           name              = "dev"
-          image             = "ghcr.io/nickvigilante/homelab-dev-templates:2616efe84a69ca04d68aee291af0ef7bfb86711e"
+          image             = "ghcr.io/nickvigilante/homelab-dev-templates:d1733a7f5827bb213f3edf4bd75b71e967425f24"
           image_pull_policy = "Always"
           command           = ["sh", "-c", coder_agent.main.init_script]
           security_context {
