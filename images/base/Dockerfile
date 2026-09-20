@@ -89,7 +89,12 @@ ENV USER=coder
 # this Dockerfile, so that script must not attempt its own (Homebrew-based)
 # install here. See DOTFILES-AUDIT.md and the Task 9 report for the full
 # before/after evidence on the kubeconfig gate.
-ENV DOTFILES_IMAGE_BUILD=1
+# ARG, not ENV: this flag must scope to the build only. As ENV it persists
+# into the running container, where the runtime `chezmoi apply` the Base
+# template is moving to would inherit it, skip the package installer and
+# ignore the kubeconfig -- silently no-opping itself. ARG values are still
+# exposed to RUN instructions, so the chezmoi invocation below still sees it.
+ARG DOTFILES_IMAGE_BUILD=1
 
 # Non-interactive chezmoi init+apply. home/.chezmoi.toml.tmpl gates all of
 # its data on promptChoiceOnce/promptStringOnce/promptBoolOnce, which
