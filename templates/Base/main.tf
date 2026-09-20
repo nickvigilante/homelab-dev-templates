@@ -84,6 +84,37 @@ data "coder_parameter" "home_disk_size" {
   }
 }
 
+# Git identity for the dotfiles' generated ~/.gitconfig. Deliberately template
+# parameters rather than coder_workspace_owner data: the owner record carries
+# the Coder account email, and substituting it would silently change the
+# identity on every commit made from a workspace.
+#
+# Immutable because it is only read once. chezmoi's promptStringOnce caches the
+# answer in ~/.config/chezmoi/chezmoi.toml on the home volume, so a later edit
+# here would change nothing and only mislead. Fix a typo with
+# `chezmoi edit-config`.
+data "coder_parameter" "git_name" {
+  name         = "git_name"
+  display_name = "Git author name"
+  description  = "Written to your git config on first start, then cached on the home volume."
+  type         = "string"
+  icon         = "/icon/git.svg"
+  mutable      = false
+}
+
+data "coder_parameter" "git_email" {
+  name         = "git_email"
+  display_name = "Git author email"
+  description  = "Written to your git config on first start. A GitHub noreply address keeps your real one out of commit metadata."
+  type         = "string"
+  icon         = "/icon/git.svg"
+  mutable      = false
+  validation {
+    regex = "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+    error = "Enter an email address, e.g. you@users.noreply.github.com."
+  }
+}
+
 data "coder_workspace" "me" {}
 data "coder_workspace_owner" "me" {}
 
@@ -91,6 +122,12 @@ resource "coder_agent" "main" {
   os             = "linux"
   arch           = "amd64"
   startup_script = file("${path.module}/startup.sh")
+
+  # Read by startup.sh on the workspace's first start only.
+  env = {
+    DOTFILES_GIT_NAME  = data.coder_parameter.git_name.value
+    DOTFILES_GIT_EMAIL = data.coder_parameter.git_email.value
+  }
 
   # The following metadata blocks are optional. They are used to display
   # information about your workspace in the dashboard. You can remove them
