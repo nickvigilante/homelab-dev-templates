@@ -68,6 +68,18 @@ RUN --mount=type=secret,id=github_token \
            chmod +x /tmp/install-tools.sh && /tmp/install-tools.sh /tmp/tools.txt' \
     && rm -f /tmp/tools.txt /tmp/install-tools.sh
 
+# zsh is installed in the apt layer above but was never made the login
+# shell, so a workspace landed in bash and never read ~/.zshrc: no aliases,
+# no prompt, no Warp subshell hook.
+#
+# This has to happen here rather than in the dotfiles. /etc/passwd is image
+# content and resets on every restart, while the dotfiles' run_once_ script
+# records its completion in chezmoistate.boltdb on the home PVC, which
+# persists. After one apply the state DB says "done" while the shell has
+# reverted to bash, and the two never reconcile. Baking it into the image
+# makes /etc/passwd correct on every start and the dotfiles script a no-op.
+RUN chsh -s /usr/bin/zsh coder
+
 # hadolint ignore=DL3066
 USER coder
 WORKDIR /home/coder
