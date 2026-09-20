@@ -55,7 +55,9 @@ jobs:
           secrets: |
             github_token=${{ secrets.GITHUB_TOKEN }}
           cache-from: type=gha,scope=base-${{ matrix.platform }}
-          cache-to: type=gha,mode=max,scope=base-${{ matrix.platform }}
+          # Read-only on PRs: exporting a PR-ref cache costs minutes and no
+          # other ref can read it. An empty cache-to means no export.
+          cache-to: ${{ github.event_name == 'push' && format('type=gha,mode=max,scope=base-{0}', matrix.platform) || '' }}
       - name: Smoke test — confirm the image boots
         run: docker run --rm base:validate uname -m
       - name: Verify baked-in CLI tools landed
