@@ -1,0 +1,87 @@
+name: template-validate
+
+# PR-only, and deliberately on a GitHub-hosted runner.
+#
+# This is the trigger fork pull requests can reach, so it must never run on the
+# self-hosted in-cluster runner: this repository is public, and a pull_request
+# job executes the PR's own code. Delivery lives in template-push.yml, which is
+# push-only for exactly that reason. See docs/runner-setup.md.
+on:
+  pull_request:
+    branches: [main]
+    paths: ['templates/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Fork PRs receive no secrets, and the tailnet/Coder credentials may not
+      # be provisioned yet. Report and skip rather than fail: a red check for
+      # "not configured" is indistinguishable from a red check for "the
+      # template is broken", which is the signal this job exists to give.
+      - name: Check whether live validation is configured
+        id: cfg
+        env:
+          TS_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          CODER_URL: ${{ secrets.CODER_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TS_ID}" ] || [ -z "${CODER_URL}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Tailscale or Coder secrets absent — skipping live validation. Fork PRs always land here."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Join the tailnet
+        if: steps.cfg.outputs.configured == 'true'
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Install the Coder CLI
+        if: steps.cfg.outputs.configured == 'true'
+        run: curl -fsSL https://coder.com/install.sh | sh -s -- --method standalone
+
+      - name: Confirm the deployment is reachable
+        if: steps.cfg.outputs.configured == 'true'
+        env:
+          CODER_URL: ${{ secrets.CODER_URL }}
+        run: curl -fsS --max-time 10 "$CODER_URL/healthz"
+
+      # --activate=false makes the Coder provisioner run the Terraform import
+      # server-side and reject anything malformed, without making the version
+      # live. That catches what `tofu validate` structurally cannot — a bad
+      # image tag is syntactically fine — and means CI never needs cluster
+      # credentials of its own, because the provisioner does the plan.
+      - name: Push a non-activated version
+        if: steps.cfg.outputs.configured == 'true'
+        env:
+          CODER_URL: ${{ secrets.CODER_URL }}
+          CODER_SESSION_TOKEN: ${{ secrets.CODER_SESSION_TOKEN }}
+          # Passed via env rather than expanded inline in run:. This value is
+          # a GitHub-assigned integer and cannot carry a payload, but inline
+          # expansion into a shell command is the shape that gets copied to a
+          # field that can -- a PR title, a branch name -- so it is avoided.
+          PR_NUMBER: ${{ github.event.number }}
+        run: |
+          set -euo pipefail
+          coder templates push Base \
+            --directory templates/Base \
+            --name "pr-${PR_NUMBER}-$(git rev-parse --short HEAD)" \
+            --activate=false \
+            --yes

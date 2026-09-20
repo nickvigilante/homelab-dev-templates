@@ -19,10 +19,15 @@ tofu fmt -recursive && tofu validate
 coder templates push Base --directory . -y
 ```
 
-Merging to `main` does NOT push the template to Coder today: there is no
-`template-push.yml` workflow, and a GitHub-hosted runner could not reach
-`coder.vigihome.net` anyway, since it resolves only to a LAN address and a
-Tailscale one. After merging, push manually from a machine on the tailnet.
+Merging to `main` with changes under `templates/` pushes and activates the
+template via `.github/workflows/template-push.yml`, which runs on the
+self-hosted runner inside the cluster. See `docs/runner-setup.md`, including
+why that workflow is deliberately push-only.
+
+Pull requests are validated first by `.github/workflows/template-validate.yml`,
+which pushes a non-activated version so the Coder provisioner checks it
+server-side. Fork PRs skip that check: they receive no secrets, so it reports
+and skips rather than failing.
 
 Bumping the image is a second manual step: `image` in `main.tf` pins a full
 SHA, so a freshly built image is not used until that string is updated.

@@ -1,0 +1,13 @@
+# actionlint cannot know the labels of a self-hosted runner, so declare them.
+# Without this it rejects `runs-on: arc-runner-set` as an unknown label and the
+# lint job fails.
+#
+# arc-runner-set is the actions-runner-controller scale set running inside the
+# k3s cluster. It exists so template-push.yml can reach coder.vigihome.net,
+# which resolves only to a LAN address and a Tailscale one and is therefore
+# unreachable from a GitHub-hosted runner.
+#
+# See docs/runner-setup.md for why that job is push-only.
+self-hosted-runner:
+  labels:
+    - arc-runner-set

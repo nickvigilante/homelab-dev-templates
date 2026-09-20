@@ -1,0 +1,57 @@
+name: template-push
+
+# DELIBERATELY push-only. Do not add a pull_request trigger. Ever.
+#
+# This job runs on a self-hosted runner inside the k3s cluster, and this
+# repository is public. A pull_request trigger executes the pull request's own
+# code, including from forks, so adding one here would let anyone run arbitrary
+# code on the cluster control plane, alongside every workspace PVC.
+#
+# PR-time validation already exists and is safe: template-validate.yml runs on
+# a GitHub-hosted runner and pushes a non-activated version. There is no reason
+# to validate here. See docs/runner-setup.md.
+on:
+  push:
+    branches: [main]
+    paths: ['templates/**']
+
+permissions:
+  contents: read
+
+# No cancel-in-progress: two rapid merges should queue, not race to activate
+# different template versions.
+concurrency:
+  group: template-push
+  cancel-in-progress: false
+
+jobs:
+  push:
+    name: push
+    runs-on: arc-runner-set
+    # A missing or unhealthy runner leaves the job queued indefinitely rather
+    # than failing, which looks identical to "nothing was merged". Fail instead.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install the Coder CLI
+        run: curl -fsSL https://coder.com/install.sh | sh -s -- --method standalone
+
+      - name: Activate the template
+        env:
+          CODER_URL: ${{ secrets.CODER_URL }}
+          CODER_SESSION_TOKEN: ${{ secrets.CODER_SESSION_TOKEN }}
+        run: |
+          set -euo pipefail
+          coder templates push Base \
+            --directory templates/Base \
+            --name "main-$(git rev-parse --short HEAD)" \
+            --yes
+
+      - name: Report the active version
+        env:
+          CODER_URL: ${{ secrets.CODER_URL }}
+          CODER_SESSION_TOKEN: ${{ secrets.CODER_SESSION_TOKEN }}
+        run: coder templates versions list Base | head -5
