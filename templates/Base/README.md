@@ -19,6 +19,10 @@ tofu fmt -recursive && tofu validate
 coder templates push Base --directory . -y
 ```
 
-Merging to `main` on the repo does this automatically via
-`.github/workflows/template-push.yml` — manual push is only for local
-iteration before opening a PR.
+Merging to `main` does NOT push the template to Coder today: there is no
+`template-push.yml` workflow, and a GitHub-hosted runner could not reach
+`coder.vigihome.net` anyway, since it resolves only to a LAN address and a
+Tailscale one. After merging, push manually from a machine on the tailnet.
+
+Bumping the image is a second manual step: `image` in `main.tf` pins a full
+SHA, so a freshly built image is not used until that string is updated.
