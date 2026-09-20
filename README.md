@@ -12,3 +12,8 @@ homelab Coder deployment at `coder.vigihome.net`.
   `main`.
 
 See each directory's own README for details.
+
+## Docs
+
+- [`docs/design.md`](docs/design.md): why the repo exists and the decisions behind it.
+- [`docs/implementation-plan.md`](docs/implementation-plan.md): the original build plan, kept as a record.
