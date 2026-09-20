@@ -8,6 +8,12 @@
 #   {ARCH_SHORT}  amd64 / arm64    (gh, fzf)
 #   {ARCH_MIXED}  x86_64 / arm64   (lazygit, gum, neovim)
 #
+# A project whose asset naming differs between architectures beyond these
+# placeholders may supply an optional FOURTH field, used verbatim (after
+# placeholder substitution) on arm64 in place of the third. rtk needs this:
+# it ships a musl build for x86_64 but a gnu build for aarch64, so no single
+# template covers both.
+#
 # Different upstream projects use different arch-naming and versioning
 # conventions in their release asset filenames — verified against each
 # project's actual latest release when this file was written; if a project
@@ -27,3 +33,4 @@ lazygit|jesseduffield/lazygit|lazygit_{VER}_linux_{ARCH_MIXED}.tar.gz
 fzf|junegunn/fzf|fzf-{VER}-linux_{ARCH_SHORT}.tar.gz
 gum|charmbracelet/gum|gum_{VER}_Linux_{ARCH_MIXED}.tar.gz
 nvim|neovim/neovim|nvim-linux-{ARCH_MIXED}.tar.gz
+rtk|rtk-ai/rtk|rtk-{ARCH_GNU}-unknown-linux-musl.tar.gz|rtk-{ARCH_GNU}-unknown-linux-gnu.tar.gz

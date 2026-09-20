@@ -40,7 +40,7 @@ fetch() {
   fi
 }
 
-while IFS='|' read -r name repo template; do
+while IFS='|' read -r name repo template template_arm64; do
   case "$name" in
     '' | '#'*) continue ;;
   esac
@@ -52,6 +52,13 @@ while IFS='|' read -r name repo template; do
     exit 1
   fi
   ver=$(printf '%s' "$tag" | sed 's/^v//')
+
+  # Optional 4th field: an arm64-specific asset template, for projects whose
+  # naming differs by more than the arch placeholders (e.g. rtk ships musl for
+  # x86_64 and gnu for aarch64). Absent on most lines, which leaves it empty.
+  if [ "$ARCH_SHORT" = "arm64" ] && [ -n "${template_arm64:-}" ]; then
+    template="$template_arm64"
+  fi
 
   asset=$(printf '%s' "$template" | sed \
     -e "s/{TAG}/${tag}/g" \
