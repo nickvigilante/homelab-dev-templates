@@ -232,6 +232,19 @@ resource "kubernetes_deployment_v1" "main" {
         }
       }
       spec {
+        # Kubernetes defaults the pod hostname to the pod name
+        # (coder-<workspace-uuid>-<replicaset>-<pod>), which changes on every
+        # rebuild and cannot be changed from inside the pod: `hostname` needs
+        # CAP_SYS_ADMIN, which the workspace securityContext drops. That breaks
+        # per-host chezmoi gating on .chezmoi.hostname, and makes anything that
+        # derives a name from the host unusable -- bootstrap/lib/bw-ssh-agent.sh
+        # in the dotfiles repo names its Bitwarden item "<host> - Home Lab",
+        # which would otherwise be a fresh item per rebuild, each named after a
+        # pod that no longer exists.
+        #
+        # lower() keeps this a valid RFC 1123 DNS label, which the field requires.
+        hostname = lower(data.coder_workspace.me.name)
+
         # This cluster mixes an amd64 control-plane node (gandalf) with
         # arm64 worker Pis. coder_agent.main.arch above is hardcoded to
         # "amd64", so the agent binary the startup script downloads is
