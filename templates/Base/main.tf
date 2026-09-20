@@ -46,7 +46,10 @@ data "coder_parameter" "memory" {
   name         = "memory"
   display_name = "Memory"
   description  = "The amount of memory in GB"
-  default      = "2"
+  # 2 GB cannot link a Rust binary: building the `bws` cargo package OOM-killed
+  # the workspace at that size. Default to a value that can actually build the
+  # toolchain; it stays mutable, so smaller workspaces can still dial it down.
+  default      = "8"
   icon         = "/icon/memory.svg"
   mutable      = true
   option {
