@@ -112,8 +112,8 @@ else
   # Nothing has drifted on a first start, so a plain apply cannot prompt.
   chezmoi init --apply \
     --promptChoice "Profile=personal" \
-    --promptString "Full name=${DOTFILES_GIT_NAME:-}" \
-    --promptString "Email address=${DOTFILES_GIT_EMAIL:-}" \
+    --promptString "Full name=${GIT_AUTHOR_NAME:-}" \
+    --promptString "Email address=${GIT_AUTHOR_EMAIL:-}" \
     --promptChoice "Machine role=ephemeral" \
     --promptBool "Has graphical display=false" \
     --promptChoice "Secret managers=none" \
