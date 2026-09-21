@@ -23,6 +23,23 @@ If PR-time checks need to grow, they grow in `template-validate.yml`.
 
 ## Install
 
+`scripts/install-arc-runner.sh` does everything below, prompts for the token
+rather than taking it as an argument, and finishes by checking that a pod in
+the runner namespace can actually reach Coder — which is what predicts whether
+`template-push.yml` will work.
+
+```bash
+./scripts/install-arc-runner.sh
+```
+
+Use a **fine-grained** PAT scoped to this repository only, with
+`Administration: read & write`.
+A classic `repo`-scoped token also works but reaches every repository you own,
+and this value is stored in a Kubernetes secret, so its blast radius is
+whatever the token can reach.
+
+The manual equivalent follows.
+
 The controller:
 
 ```bash
