@@ -36,11 +36,12 @@ jobs:
         env:
           TS_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           CODER_URL: ${{ secrets.CODER_URL }}
+          CODER_TAILNET_IP: ${{ vars.CODER_TAILNET_IP }}
         run: |
           set -euo pipefail
-          if [ -z "${TS_ID}" ] || [ -z "${CODER_URL}" ]; then
+          if [ -z "${TS_ID}" ] || [ -z "${CODER_URL}" ] || [ -z "${CODER_TAILNET_IP}" ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Tailscale or Coder secrets absent — skipping live validation. Fork PRs always land here."
+            echo "::notice::Tailscale/Coder secrets or CODER_TAILNET_IP absent — skipping live validation. Fork PRs always land here."
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
@@ -52,6 +53,36 @@ jobs:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
+
+      # Resolution, not routing, is what fails without this. The observed error
+      # is `curl: (28) Resolving timed out`, a hang rather than a refusal:
+      # coder.vigihome.net has no public record, and after the Tailscale action
+      # runs the resolver is MagicDNS, whose split-DNS lookup for vigihome.net
+      # would need an internal resolver on port 53 that tag:ci is not granted.
+      # The query has nowhere to go.
+      #
+      # Widening the ACL to reach that resolver is the alternative, and is not
+      # taken: keeping tag:ci scoped to one host on one port is most of the value
+      # of validating from a throwaway node.
+      #
+      # Map it in /etc/hosts rather than using curl --resolve, because the coder
+      # CLI needs it too and has no equivalent flag; a curl-only fix would just
+      # move the failure to the push step.
+      #
+      # The address is a repository variable rather than a literal so the tailnet
+      # topology is not baked into a public workflow, and so a re-addressed host
+      # is one setting away rather than a commit.
+      - name: Resolve the deployment to its tailnet address
+        if: steps.cfg.outputs.configured == 'true'
+        env:
+          CODER_URL: ${{ secrets.CODER_URL }}
+          CODER_TAILNET_IP: ${{ vars.CODER_TAILNET_IP }}
+        run: |
+          set -euo pipefail
+          host="$(printf '%s' "$CODER_URL" | sed -E 's#^[a-z]+://##; s#[:/].*$##')"
+          [ -n "$host" ] || { echo "::error::could not parse a hostname out of CODER_URL"; exit 1; }
+          printf '%s %s\n' "$CODER_TAILNET_IP" "$host" | sudo tee -a /etc/hosts > /dev/null
+          echo "Mapped $host -> $CODER_TAILNET_IP"
 
       - name: Install the Coder CLI
         if: steps.cfg.outputs.configured == 'true'
