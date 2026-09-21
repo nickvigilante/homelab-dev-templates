@@ -59,6 +59,16 @@ jobs:
             --name "main-$(git rev-parse --short HEAD)" \
             --yes
 
+      # The icon is template metadata, not part of a version, so `templates
+      # push` cannot set it. Re-stating it on every push keeps it declared
+      # here rather than living only in the dashboard. /icon/code.svg ships
+      # with Coder; any other /icon/*.svg or /emojis/*.png path works too.
+      - name: Set the template icon
+        env:
+          CODER_URL: ${{ secrets.CODER_URL }}
+          CODER_SESSION_TOKEN: ${{ secrets.CODER_SESSION_TOKEN }}
+        run: coder templates edit Base --icon /icon/code.svg
+
       - name: Report the active version
         env:
           CODER_URL: ${{ secrets.CODER_URL }}

@@ -127,20 +127,11 @@ data "coder_workspace" "me" {}
 data "coder_workspace_owner" "me" {}
 
 resource "coder_agent" "main" {
-  os             = "linux"
-  arch           = "amd64"
-  startup_script = file("${path.module}/startup.sh")
+  os   = "linux"
+  arch = "amd64"
 
-  # Stated rather than inherited. startup.sh deliberately exits non-zero when
-  # chezmoi fails, so Coder flags the run, and its error message tells the user
-  # the workspace is still usable and to run `chezmoi apply` by hand. That
-  # promise only holds while the behaviour is non-blocking -- under "blocking" a
-  # failed apply would keep them out of the workspace entirely, which is the
-  # opposite of what the script says. Pinning it here means a change of provider
-  # default cannot quietly turn a warning into a lockout.
-  startup_script_behavior = "non-blocking"
-
-  # Read by startup.sh on the workspace's first start only.
+  # Read by dotfiles.sh (coder_script.dotfiles) on the workspace's first start
+  # only.
   env = {
     DOTFILES_GIT_NAME  = data.coder_parameter.git_name.value
     DOTFILES_GIT_EMAIL = data.coder_parameter.git_email.value
@@ -201,6 +192,34 @@ resource "coder_agent" "main" {
     interval = 60
     timeout  = 1
   }
+}
+
+# Dotfiles as a coder_script, not the agent's startup_script: coder_script is
+# what Coder recommends now, it gets its own row and log in the dashboard, and
+# it can order itself after the claude-code module's scripts with
+# `coder exp sync`. See dotfiles.sh for why it waits on them.
+resource "coder_script" "dotfiles" {
+  agent_id     = coder_agent.main.id
+  display_name = "Dotfiles"
+  icon         = "/icon/git.svg"
+  run_on_start = true
+
+  # dotfiles.sh deliberately exits non-zero when chezmoi fails, so Coder flags
+  # the run, and its error message tells the user the workspace is still usable
+  # and to run `chezmoi apply` by hand. That promise only holds while login
+  # does not wait on this script -- otherwise a failed apply would keep them
+  # out of the workspace entirely. Stated rather than inherited, so a change of
+  # provider default cannot quietly turn a warning into a lockout.
+  start_blocks_login = false
+
+  # The script names its dependencies through a placeholder rather than
+  # templatefile(), which would also try to interpolate every shell ${...}.
+  # try() covers a stopped workspace, where the module has count = 0.
+  script = replace(
+    file("${path.module}/dotfiles.sh"),
+    "@DOTFILES_AFTER_UNITS@",
+    join(" ", try(module.claude-code[0].scripts, [])),
+  )
 }
 
 resource "kubernetes_persistent_volume_claim_v1" "home" {
