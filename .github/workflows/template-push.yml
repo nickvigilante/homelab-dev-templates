@@ -61,13 +61,15 @@ jobs:
 
       # The icon is template metadata, not part of a version, so `templates
       # push` cannot set it. Re-stating it on every push keeps it declared
-      # here rather than living only in the dashboard. /icon/code.svg ships
-      # with Coder; any other /icon/*.svg or /emojis/*.png path works too.
+      # here rather than living only in the dashboard. 1f9f1 is the bricks
+      # emoji, for the template the others build on. It ships with Coder, as
+      # does any other /emojis/*.png or /icon/*.svg path; avoid the /icon/
+      # ones named after a product, which read as that product's template.
       - name: Set the template icon
         env:
           CODER_URL: ${{ secrets.CODER_URL }}
           CODER_SESSION_TOKEN: ${{ secrets.CODER_SESSION_TOKEN }}
-        run: coder templates edit Base --icon /icon/code.svg
+        run: coder templates edit Base --icon /emojis/1f9f1.png
 
       - name: Report the active version
         env:
