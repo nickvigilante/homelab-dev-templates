@@ -14,7 +14,7 @@ see the repo-level design doc for why that pin exists).
 - `git_name` — git author name, immutable
 - `git_email` — git author email, immutable
 
-`git_name` and `git_email` are written to `~/.gitconfig` by `startup.sh` on the
+`git_name` and `git_email` are written to `~/.gitconfig` by `dotfiles.sh` on the
 workspace's first start, and cached by chezmoi on the home volume after that.
 They are immutable because editing them later would change nothing: the cached
 answer wins. Correct a typo with `chezmoi edit-config` inside the workspace.
