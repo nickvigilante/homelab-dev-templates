@@ -11,8 +11,8 @@ see the repo-level design doc for why that pin exists).
 - `cpu` — 2/4/6/8 cores (default 2)
 - `memory` — 2/4/6/8 GB (default 8)
 - `home_disk_size` — GB, immutable after creation (default 10)
-- `git_name` — git author name, immutable
-- `git_email` — git author email, immutable
+- `git_name` — git author name, immutable (default `Nick Vigilante`)
+- `git_email` — git author email, immutable (default `nickvigilante@users.noreply.github.com`)
 
 `git_name` and `git_email` are written to `~/.gitconfig` by `dotfiles.sh` on the
 workspace's first start, and cached by chezmoi on the home volume after that.

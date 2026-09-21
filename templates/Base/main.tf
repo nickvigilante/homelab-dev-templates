@@ -89,6 +89,9 @@ data "coder_parameter" "home_disk_size" {
 # the Coder account email, and substituting it would silently change the
 # identity on every commit made from a workspace.
 #
+# Defaulted to the owner's identity so creating a workspace needs no typing;
+# the fields stay on the form, prefilled, for anyone who wants another one.
+#
 # Immutable because it is only read once. chezmoi's promptStringOnce caches the
 # answer in ~/.config/chezmoi/chezmoi.toml on the home volume, so a later edit
 # here would change nothing and only mislead. Fix a typo with
@@ -100,6 +103,11 @@ data "coder_parameter" "git_name" {
   type         = "string"
   icon         = "/icon/git.svg"
   mutable      = false
+  default      = "Nick Vigilante"
+  validation {
+    regex = "\\S"
+    error = "Enter a name."
+  }
 }
 
 data "coder_parameter" "git_email" {
@@ -109,16 +117,13 @@ data "coder_parameter" "git_email" {
   type         = "string"
   icon         = "/icon/git.svg"
   mutable      = false
-  # The empty alternative is load-bearing. Importing a template runs a plan
-  # with every parameter at its default, and this one has no default, so it
-  # evaluates as "" during import. A regex that rejects "" therefore fails the
-  # import itself and the template cannot be pushed at all.
-  #
-  # Having no default still makes the parameter required when a workspace is
-  # created, so an empty value cannot be chosen there -- only reached by the
-  # import-time plan, which never builds anything.
+  default      = "nickvigilante@users.noreply.github.com"
+  # No empty alternative any more. Importing a template runs a plan with every
+  # parameter at its default, so the regex used to accept "" for the import to
+  # pass while there was no default. Now the default is itself valid, and a
+  # cleared field is rejected at workspace creation, as it should be.
   validation {
-    regex = "^$|^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+    regex = "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
     error = "Enter an email address, e.g. you@users.noreply.github.com."
   }
 }
