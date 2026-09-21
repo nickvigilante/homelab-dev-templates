@@ -131,6 +131,15 @@ resource "coder_agent" "main" {
   arch           = "amd64"
   startup_script = file("${path.module}/startup.sh")
 
+  # Stated rather than inherited. startup.sh deliberately exits non-zero when
+  # chezmoi fails, so Coder flags the run, and its error message tells the user
+  # the workspace is still usable and to run `chezmoi apply` by hand. That
+  # promise only holds while the behaviour is non-blocking -- under "blocking" a
+  # failed apply would keep them out of the workspace entirely, which is the
+  # opposite of what the script says. Pinning it here means a change of provider
+  # default cannot quietly turn a warning into a lockout.
+  startup_script_behavior = "non-blocking"
+
   # Read by startup.sh on the workspace's first start only.
   env = {
     DOTFILES_GIT_NAME  = data.coder_parameter.git_name.value
