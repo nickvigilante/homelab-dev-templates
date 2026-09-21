@@ -84,9 +84,19 @@ jobs:
           printf '%s %s\n' "$CODER_TAILNET_IP" "$host" | sudo tee -a /etc/hosts > /dev/null
           echo "Mapped $host -> $CODER_TAILNET_IP"
 
+      # --prefix, and then $GITHUB_PATH, because the installer's default
+      # location depends on who is running it: /usr/local/bin as root, but
+      # ~/.local/bin otherwise, and ~/.local/bin is not on a GitHub-hosted
+      # runner's PATH. Without this the step succeeds and the next one fails
+      # with `coder: command not found`.
       - name: Install the Coder CLI
         if: steps.cfg.outputs.configured == 'true'
-        run: curl -fsSL https://coder.com/install.sh | sh -s -- --method standalone
+        run: |
+          set -euo pipefail
+          curl -fsSL https://coder.com/install.sh \
+            | sh -s -- --method standalone --prefix "$HOME/.coder"
+          echo "$HOME/.coder/bin" >> "$GITHUB_PATH"
+          "$HOME/.coder/bin/coder" version | head -1
 
       - name: Confirm the deployment is reachable
         if: steps.cfg.outputs.configured == 'true'
