@@ -36,8 +36,17 @@ jobs:
         with:
           persist-credentials: false
 
+      # Explicit --prefix and $GITHUB_PATH. This currently works without them
+      # only because the ARC runner happens to run as root, so the installer
+      # picks /usr/local/bin; a non-root runner image would break it exactly as
+      # it broke template-validate. Do not depend on the runner's uid.
       - name: Install the Coder CLI
-        run: curl -fsSL https://coder.com/install.sh | sh -s -- --method standalone
+        run: |
+          set -euo pipefail
+          curl -fsSL https://coder.com/install.sh \
+            | sh -s -- --method standalone --prefix "$HOME/.coder"
+          echo "$HOME/.coder/bin" >> "$GITHUB_PATH"
+          "$HOME/.coder/bin/coder" version | head -1
 
       - name: Activate the template
         env:
