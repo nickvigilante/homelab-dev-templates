@@ -24,11 +24,56 @@ die() {
 }
 step() { printf '\n==> %s\n' "$*"; }
 
+missing=""
 for cmd in helm kubectl; do
-  command -v "$cmd" >/dev/null 2>&1 || die "$cmd is not on PATH"
+  command -v "$cmd" >/dev/null 2>&1 || missing="$missing $cmd"
 done
+if [ -n "$missing" ]; then
+  cat >&2 <<EOF
+error: not on PATH:$missing
 
-kubectl cluster-info >/dev/null 2>&1 || die "kubectl cannot reach a cluster; check your kubeconfig context"
+Both are single binaries; no package manager needed:
+
+  kubectl:
+    curl -sLo ~/.local/bin/kubectl \\
+      "https://dl.k8s.io/release/\$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    chmod +x ~/.local/bin/kubectl
+
+  helm:
+    curl -sL https://get.helm.sh/helm-v4.3.0-linux-amd64.tar.gz | tar xz -C /tmp
+    install -m755 /tmp/linux-amd64/helm ~/.local/bin/helm
+EOF
+  exit 1
+fi
+
+# The dotfiles deploy the homelab kubeconfig to a fixed path, so fall back to
+# it rather than making the caller export KUBECONFIG. Only when nothing is set:
+# an explicit KUBECONFIG always wins, so this cannot silently retarget a
+# cluster someone deliberately selected.
+if [ -z "${KUBECONFIG:-}" ] && [ -f "$HOME/.kube/homelab.yaml" ]; then
+  export KUBECONFIG="$HOME/.kube/homelab.yaml"
+  printf 'Using KUBECONFIG=%s\n' "$KUBECONFIG"
+fi
+
+if ! kubectl cluster-info >/dev/null 2>&1; then
+  cat >&2 <<EOF
+error: kubectl cannot reach a cluster.
+
+  KUBECONFIG=${KUBECONFIG:-<unset>}
+
+The homelab API server is published on the tailnet as
+gandalf.tail395fc0.ts.net:6443, so reaching it needs BOTH:
+
+  1. Tailscale connected        -- check with: tailscale status
+  2. KUBECONFIG pointing at the homelab config
+       export KUBECONFIG=~/.kube/homelab.yaml
+
+If ~/.kube/homelab.yaml is absent: chezmoi deploys it only where a Bitwarden
+vault is configured, so run chezmoi apply with bw unlocked.
+EOF
+  exit 1
+fi
+
 printf 'Cluster context: %s\n' "$(kubectl config current-context)"
 
 # ── The GitHub credential ────────────────────────────────────────────────────
