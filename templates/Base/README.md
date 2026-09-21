@@ -11,21 +11,20 @@ see the repo-level design doc for why that pin exists).
 - `cpu` — 2/4/6/8 cores (default 2)
 - `memory` — 2/4/6/8 GB (default 8)
 - `home_disk_size` — GB, immutable after creation (default 10)
-- `git_name` — git author name, immutable (default `Nick Vigilante`)
-- `git_email` — git author email, immutable (default `nickvigilante@users.noreply.github.com`)
-
-`git_name` and `git_email` are written to `~/.gitconfig` by `dotfiles.sh` on the
-workspace's first start, and cached by chezmoi on the home volume after that.
-They are immutable because editing them later would change nothing: the cached
-answer wins. Correct a typo with `chezmoi edit-config` inside the workspace.
-
-They are template parameters rather than values taken from the Coder account so
-that commits carry the address you choose — a GitHub noreply address, say —
-instead of whatever the account happens to use.
 
 Raising the `memory` default does not affect existing workspaces. A workspace
 keeps the value it was created with; change it in the workspace's own settings,
 which is allowed because `memory` is mutable.
+
+## Git identity
+
+Commits made in a workspace are authored as `Nick Vigilante <nickvigilante@users.noreply.github.com>`.
+`main.tf` sets `GIT_AUTHOR_*` and `GIT_COMMITTER_*` on the agent, and git ranks those above `user.name` and `user.email` in any config file.
+`dotfiles.sh` passes the same values to chezmoi on first start, so the generated `~/.gitconfig` agrees.
+
+They are fixed in `main.tf`, not taken from the Coder account, so commits carry the noreply address and not whatever the account uses.
+Change the identity by editing the `locals` block in `main.tf`.
+Because the values come from the agent's environment, a change reaches existing workspaces on their next restart.
 
 ## Updating
 
