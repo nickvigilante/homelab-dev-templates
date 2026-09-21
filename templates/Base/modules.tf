@@ -1,12 +1,6 @@
-module "vscode-desktop" {
-  count       = data.coder_workspace.me.start_count
-  source      = "registry.coder.com/coder/vscode-desktop/coder"
-  version     = "1.2.1"
-  agent_id    = coder_agent.main.id
-  folder      = ""
-  open_recent = false
-}
-
+# No vscode-desktop module: Coder renders a built-in VS Code Desktop app for
+# every agent, so adding one produced two identical buttons. To open a specific
+# folder, add the module back and set display_apps.vscode = false on the agent.
 
 variable "claude_code_oauth_token" {
   description = "OAuth token passed to Claude Code via the CLAUDE_CODE_OAUTH_TOKEN env var. Generate one with `claude setup-token`."
