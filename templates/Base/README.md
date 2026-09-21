@@ -9,8 +9,23 @@ see the repo-level design doc for why that pin exists).
 ## Parameters
 
 - `cpu` — 2/4/6/8 cores (default 2)
-- `memory` — 2/4/6/8 GB (default 2)
+- `memory` — 2/4/6/8 GB (default 8)
 - `home_disk_size` — GB, immutable after creation (default 10)
+- `git_name` — git author name, immutable
+- `git_email` — git author email, immutable
+
+`git_name` and `git_email` are written to `~/.gitconfig` by `startup.sh` on the
+workspace's first start, and cached by chezmoi on the home volume after that.
+They are immutable because editing them later would change nothing: the cached
+answer wins. Correct a typo with `chezmoi edit-config` inside the workspace.
+
+They are template parameters rather than values taken from the Coder account so
+that commits carry the address you choose — a GitHub noreply address, say —
+instead of whatever the account happens to use.
+
+Raising the `memory` default does not affect existing workspaces. A workspace
+keeps the value it was created with; change it in the workspace's own settings,
+which is allowed because `memory` is mutable.
 
 ## Updating
 
