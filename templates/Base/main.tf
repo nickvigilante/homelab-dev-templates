@@ -49,9 +49,9 @@ data "coder_parameter" "memory" {
   # 2 GB cannot link a Rust binary: building the `bws` cargo package OOM-killed
   # the workspace at that size. Default to a value that can actually build the
   # toolchain; it stays mutable, so smaller workspaces can still dial it down.
-  default      = "8"
-  icon         = "/icon/memory.svg"
-  mutable      = true
+  default = "8"
+  icon    = "/icon/memory.svg"
+  mutable = true
   option {
     name  = "2 GB"
     value = "2"
@@ -109,8 +109,16 @@ data "coder_parameter" "git_email" {
   type         = "string"
   icon         = "/icon/git.svg"
   mutable      = false
+  # The empty alternative is load-bearing. Importing a template runs a plan
+  # with every parameter at its default, and this one has no default, so it
+  # evaluates as "" during import. A regex that rejects "" therefore fails the
+  # import itself and the template cannot be pushed at all.
+  #
+  # Having no default still makes the parameter required when a workspace is
+  # created, so an empty value cannot be chosen there -- only reached by the
+  # import-time plan, which never builds anything.
   validation {
-    regex = "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+    regex = "^$|^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
     error = "Enter an email address, e.g. you@users.noreply.github.com."
   }
 }
