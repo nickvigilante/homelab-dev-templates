@@ -401,7 +401,7 @@ if __name__ == "__main__":
 
 ```bash
 cd services/alert-relay
-python3 -m pytest test_relay.py -v
+python3 -m unittest test_relay -v
 ```
 
 Expected: `ModuleNotFoundError: No module named 'relay'` (or import
@@ -552,7 +552,7 @@ if __name__ == "__main__":
 - [ ] **Step 4: Run the tests, verify they pass**
 
 ```bash
-python3 -m pytest test_relay.py -v
+python3 -m unittest test_relay -v
 ```
 
 Expected: all tests `PASS`.
@@ -601,7 +601,7 @@ framework) -- see `docs/design-investigate.md` in this repo for why.
 ## Local testing
 
 \`\`\`bash
-python3 -m pytest test_relay.py -v
+python3 -m unittest test_relay -v
 \`\`\`
 ```
 
@@ -633,7 +633,7 @@ template (docs/design-investigate.md).
 
 ## Testing
 
-- `python3 -m pytest test_relay.py -v` -- all passing, covers resolved
+- `python3 -m unittest test_relay -v` -- all passing, covers resolved
   vs. firing alerts, empty alert lists, fingerprint dedupe + TTL
   expiry, and that create_task failures never propagate/crash the
   handler.
@@ -979,7 +979,7 @@ ______________________________________________________________________
   from Tasks 1 and 3.
 
 - Produces: `lint` (existing required check) now also validates
-  `templates/Investigate` and runs the relay's `pytest`; a new,
+  `templates/Investigate` and runs the relay's `unittest` suite; a new,
   path-filtered (not required) `alert-relay-image-build` workflow
   publishing `ghcr.io/nickvigilante/homelab-dev-templates-alert-relay`.
 
@@ -996,7 +996,7 @@ In `.github/workflows/lint.yml`, after the existing `tofu validate (templates/Ba
           tofu validate
       - name: relay unit tests
         working-directory: services/alert-relay
-        run: python3 -m pytest test_relay.py -v
+        run: python3 -m unittest test_relay -v
 ```
 
 - [ ] **Step 2: Write `.github/workflows/alert-relay-image-build.yml`**
@@ -1082,7 +1082,7 @@ git commit -m "$(cat <<'EOF'
 Extend CI for the Investigate template and alert-relay image
 
 lint.yml now also validates templates/Investigate and runs the relay's
-pytest suite. New path-filtered alert-relay-image-build.yml publishes
+unittest suite. New path-filtered alert-relay-image-build.yml publishes
 the relay image to GHCR on merge, single-arch (amd64 only).
 
 Assisted-by: AI
@@ -1093,7 +1093,7 @@ gh pr create --title "Extend CI for the Investigate template and alert-relay ima
 ## Summary
 
 - `lint.yml`: adds `tofu validate` for `templates/Investigate` and the
-  relay's `pytest` suite.
+  relay's `unittest` suite.
 - New `alert-relay-image-build.yml`: path-filtered, publishes
   `ghcr.io/nickvigilante/homelab-dev-templates-alert-relay` on merge.
   Not a required check (same path-filter trap as `image-build.yml`).
