@@ -1,0 +1,23 @@
+# No vscode-desktop module: Coder renders a built-in VS Code Desktop app for
+# every agent, so adding one produced two identical buttons. To open a specific
+# folder, add the module back and set display_apps.vscode = false on the agent.
+
+module "claude-code" {
+  count                   = data.coder_workspace.me.start_count
+  source                  = "registry.coder.com/coder/claude-code/coder"
+  version                 = "5.2.0"
+  agent_id                = coder_agent.main.id
+  anthropic_api_key       = ""
+  claude_binary_path      = "$HOME/.local/bin"
+  claude_code_oauth_token = var.claude_code_oauth_token
+  claude_code_version     = "latest"
+  disable_autoupdater     = false
+  enable_ai_gateway       = false
+  icon                    = "/icon/claude.svg"
+  install_claude_code     = true
+  mcp                     = ""
+  model                   = ""
+  post_install_script     = null
+  pre_install_script      = null
+  workdir                 = null
+}
