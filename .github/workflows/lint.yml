@@ -120,8 +120,22 @@ jobs:
           # build. The "Secret scan (betterleaks)" steps above are the real scan.
           SKIP: betterleaks
         run: pre-commit run --all-files --show-diff-on-failure
-      - name: tofu validate (templates/Base)
-        working-directory: templates/Base
+      - name: Script tests
+        run: |
+          set -euo pipefail
+          for t in scripts/tests/*_test.sh; do "$t"; done
+      - name: tofu test (modules/workspace)
+        working-directory: modules/workspace
         run: |
           tofu init -input=false
-          tofu validate
+          tofu test
+      # Every template, from a freshly vendored module copy, exactly as
+      # template-push.yml uploads it.
+      - name: tofu validate (every template)
+        run: |
+          set -euo pipefail
+          for dir in templates/*/; do
+            echo "== ${dir}"
+            scripts/vendor-module.sh "$dir"
+            (cd "$dir" && tofu init -input=false && tofu validate)
+          done

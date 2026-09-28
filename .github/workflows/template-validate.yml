@@ -13,6 +13,9 @@ on:
       - 'templates/**'
       # Otherwise a change to this workflow alone never runs it.
       - '.github/workflows/template-validate.yml'
+      - 'modules/workspace/**'
+      - 'scripts/vendor-module.sh'
+      - 'scripts/changed-templates.sh'
 
 permissions:
   contents: read
@@ -22,9 +25,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
-    name: validate
+  # Which templates this PR affects. A module change affects all of them; see
+  # scripts/changed-templates.sh.
+  changes:
     runs-on: ubuntu-latest
+    outputs:
+      templates: ${{ steps.list.outputs.templates }}
+    steps:
+      # Full history: the diff needs the PR's base commit.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: List affected templates
+        id: list
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          templates="$(scripts/changed-templates.sh "$BASE_SHA" HEAD | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+          echo "templates=${templates}" >> "$GITHUB_OUTPUT"
+          echo "Affected templates: ${templates}"
+
+  validate:
+    name: validate (${{ matrix.template }})
+    needs: changes
+    if: needs.changes.outputs.templates != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        template: ${{ fromJSON(needs.changes.outputs.templates) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -117,6 +148,12 @@ jobs:
       # live. That catches what `tofu validate` structurally cannot — a bad
       # image tag is syntactically fine — and means CI never needs cluster
       # credentials of its own, because the provisioner does the plan.
+      - name: Vendor the shared module
+        if: steps.cfg.outputs.configured == 'true'
+        env:
+          TEMPLATE: ${{ matrix.template }}
+        run: scripts/vendor-module.sh "templates/${TEMPLATE}"
+
       - name: Push a non-activated version
         if: steps.cfg.outputs.configured == 'true'
         env:
@@ -127,10 +164,12 @@ jobs:
           # expansion into a shell command is the shape that gets copied to a
           # field that can -- a PR title, a branch name -- so it is avoided.
           PR_NUMBER: ${{ github.event.number }}
+          # A directory name, which a fork PR controls: env, never inline.
+          TEMPLATE: ${{ matrix.template }}
         run: |
           set -euo pipefail
-          coder templates push Base \
-            --directory templates/Base \
+          coder templates push "$TEMPLATE" \
+            --directory "templates/${TEMPLATE}" \
             --name "pr-${PR_NUMBER}-$(git rev-parse --short HEAD)" \
             --activate=false \
             --yes
