@@ -16,6 +16,7 @@ on:
       - 'modules/workspace/**'
       - 'scripts/vendor-module.sh'
       - 'scripts/changed-templates.sh'
+      - 'scripts/template-matrix.sh'
 
 permissions:
   contents: read
@@ -37,13 +38,17 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # template-matrix.sh fails on an affected template with no
+      # template.json, so the gap shows on the pull request and not only when
+      # template-push.yml runs on main. Validation needs only the names.
       - name: List affected templates
         id: list
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          templates="$(scripts/changed-templates.sh "$BASE_SHA" HEAD | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+          matrix="$(scripts/template-matrix.sh "$BASE_SHA" HEAD)"
+          templates="$(printf '%s' "$matrix" | jq -c 'map(.template)')"
           echo "templates=${templates}" >> "$GITHUB_OUTPUT"
           echo "Affected templates: ${templates}"
 

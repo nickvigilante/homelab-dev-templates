@@ -31,11 +31,11 @@ Because the values come from the agent's environment, a change reaches existing 
 
 ```bash
 # From the repo root. The push uploads only this directory, so the module
-# must be copied in first; a missing copy fails the import.
+# must be copied in first. push-template.sh vendors it fresh every time:
+# pushing the directory directly can upload a stale, git-ignored copy.
 scripts/vendor-module.sh templates/Base
-cd templates/Base
-tofu fmt -recursive && tofu init && tofu validate
-coder templates push Base --directory . -y
+(cd templates/Base && tofu fmt -recursive && tofu init && tofu validate)
+scripts/push-template.sh Base -y
 ```
 
 Merging to `main` with changes under `templates/` pushes and activates the
