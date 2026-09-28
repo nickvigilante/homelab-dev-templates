@@ -67,7 +67,8 @@ jobs:
              && gh --version && delta --version && lazygit --version \
              && fzf --version && gum --version && nvim --version \
              && chezmoi --version && starship --version && just --version \
-             && zoxide --version && uv --version && ruff --version'
+             && zoxide --version && uv --version && ruff --version \
+             && kubectl version --client && helm version && flux version --client'
       - name: Verify no dotfiles secrets leaked into the image (DOTFILES-AUDIT.md gate)
         run: |
           set -euo pipefail

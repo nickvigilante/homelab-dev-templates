@@ -56,6 +56,19 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 RUN uv tool install ruff && chmod -R a+rX "${UV_TOOL_DIR}"
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
+# Kubernetes CLIs for the k3s templates. helm and flux ship official
+# installers, which install into /usr/local/bin when run as root. kubectl has
+# none: dl.k8s.io serves one static binary per release and architecture, and
+# stable.txt names the current release. kubectl supports one minor version of
+# skew against the cluster, so bump k3s or pin this if the two drift apart.
+RUN curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+RUN curl -fsSL https://fluxcd.io/install.sh | bash
+RUN arch="$(dpkg --print-architecture)" \
+    && version="$(curl -fsSL https://dl.k8s.io/release/stable.txt)" \
+    && curl -fsSLo /usr/local/bin/kubectl \
+         "https://dl.k8s.io/release/${version}/bin/linux/${arch}/kubectl" \
+    && chmod 0755 /usr/local/bin/kubectl
+
 # ── CLI tools fetched as prebuilt binaries from their latest GitHub release ─
 # See tools.txt for the list + per-tool asset-name pattern, and
 # install-tools.sh for the fetch/install logic. Needs GITHUB_TOKEN (mounted
