@@ -9,7 +9,10 @@ name: template-validate
 on:
   pull_request:
     branches: [main]
-    paths: ['templates/**']
+    paths:
+      - 'templates/**'
+      # Otherwise a change to this workflow alone never runs it.
+      - '.github/workflows/template-validate.yml'
 
 permissions:
   contents: read
@@ -45,6 +48,25 @@ jobs:
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
+
+      # Before the tailnet, not after: once Tailscale is up the resolver is
+      # MagicDNS, which tag:ci cannot use for public names either, so fetching
+      # the installer from coder.com fails with `curl: (6) Could not resolve
+      # host`. That broke every live validation from 2026-09-21 on.
+      #
+      # --prefix, and then $GITHUB_PATH, because the installer's default
+      # location depends on who is running it: /usr/local/bin as root, but
+      # ~/.local/bin otherwise, and ~/.local/bin is not on a GitHub-hosted
+      # runner's PATH. Without this the step succeeds and the next one fails
+      # with `coder: command not found`.
+      - name: Install the Coder CLI
+        if: steps.cfg.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          curl -fsSL https://coder.com/install.sh \
+            | sh -s -- --method standalone --prefix "$HOME/.coder"
+          echo "$HOME/.coder/bin" >> "$GITHUB_PATH"
+          "$HOME/.coder/bin/coder" version | head -1
 
       - name: Join the tailnet
         if: steps.cfg.outputs.configured == 'true'
@@ -83,20 +105,6 @@ jobs:
           [ -n "$host" ] || { echo "::error::could not parse a hostname out of CODER_URL"; exit 1; }
           printf '%s %s\n' "$CODER_TAILNET_IP" "$host" | sudo tee -a /etc/hosts > /dev/null
           echo "Mapped $host -> $CODER_TAILNET_IP"
-
-      # --prefix, and then $GITHUB_PATH, because the installer's default
-      # location depends on who is running it: /usr/local/bin as root, but
-      # ~/.local/bin otherwise, and ~/.local/bin is not on a GitHub-hosted
-      # runner's PATH. Without this the step succeeds and the next one fails
-      # with `coder: command not found`.
-      - name: Install the Coder CLI
-        if: steps.cfg.outputs.configured == 'true'
-        run: |
-          set -euo pipefail
-          curl -fsSL https://coder.com/install.sh \
-            | sh -s -- --method standalone --prefix "$HOME/.coder"
-          echo "$HOME/.coder/bin" >> "$GITHUB_PATH"
-          "$HOME/.coder/bin/coder" version | head -1
 
       - name: Confirm the deployment is reachable
         if: steps.cfg.outputs.configured == 'true'
