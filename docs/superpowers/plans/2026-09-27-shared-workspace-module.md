@@ -2,6 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status (2026-10-02):** Tasks 1–6 shipped in #45, including the real-workspace migration test.
+Tasks 7 and 8 were dropped: #46, which implemented Task 7, was closed in favor of the analyzer plan's `images/analyzer/` (`nickvigilante/homelab#241`), so `Base` keeps its current image.
+
 **Goal:** Move everything `templates/Base` defines except its parameters into a shared `modules/workspace/` module that CI vendors into each template, with `Base` behaving identically for existing workspaces, and bake `kubectl`, `flux` and `helm` into the base image.
 
 **Architecture:** `modules/workspace/` holds the agent, dotfiles script, home PVC, deployment and `claude-code` module, driven by inputs.

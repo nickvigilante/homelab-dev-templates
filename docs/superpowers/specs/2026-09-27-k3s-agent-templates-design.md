@@ -2,11 +2,32 @@
 
 **Goal:** Two Coder workspace templates that give Coder Agents access to the k3s cluster: `K3s-Readonly`, from which an agent diagnoses and troubleshoots without being able to change anything, and `K3s-Operator`, usable only by the owner, from which an agent implements changes through GitOps pull requests plus a small set of imperative `kubectl` actions.
 
-**Status:** Approved in brainstorming (2026-09-27); not yet implemented.
+**Status:** Partly superseded (2026-10-02); see "Status update" below.
+The shared module and multi-template CI shipped in #45.
+`K3s-Readonly` is replaced by the `Analyzer` template, and the cluster tools move to `images/analyzer/`.
+`K3s-Operator` is still open.
 
 **Date:** 2026-09-27.
 
 **Related issues:** #6 (agent-forwarded SSH signing, whose reasoning about in-cluster credentials this design builds on), #26 (image SHA bumps), #27 (legacy template retirement), and #41, #42 and #43 (Rust, Python and Node.js templates, which follow this work and reuse its shared module).
+
+## Status update (2026-10-02)
+
+A parallel thread designed the same read-only agent as an alert-triggered `Analyzer`, merged in `nickvigilante/homelab` as the spec in #239 and the plans in #240 and #241.
+It is more complete than `K3s-Readonly`: an egress NetworkPolicy, a Coder user limited to that one template, a structured report contract and an alert-driven orchestrator.
+So this design is reconciled with it as follows:
+
+- **Shipped, as designed here:** the shared module, the vendoring and per-template CI, and the `Base` migration with `moved` blocks (#45, implementation phase 1).
+- **Replaced by the Analyzer:** everything in this document about `K3s-Readonly`, including `coder-ws-reader`.
+  The Analyzer runs as ServiceAccount `analyzer`, bound to the built-in `view` role, as this design also intended.
+  `nickvigilante/homelab#242` adapts the analyzer plan to #45.
+- **Replaced by `images/analyzer/`:** putting `kubectl`, `helm` and `flux` in the base image (implementation phase 2).
+  #46 implemented it and was closed, because the analyzer plan keeps those tools in a separate image with a checksum-verified `kubectl` pinned to the cluster's minor version.
+- **Still open: `K3s-Operator`.**
+  The analyzer spec names a different operator template as out of scope, one that holds `Homelab-IaC` credentials for `ansible` and `tofu`.
+  This design's operator instead changes the cluster through `homelab` pull requests from a GitHub App plus a few imperative `kubectl` verbs, and holds no IaC credentials.
+  Which one to build, or whether both are wanted, is decided before the operator gets its own plan.
+  Sections below that describe `K3s-Readonly` are kept as the record of this design and no longer describe what will be built.
 
 ## Context
 
@@ -92,7 +113,7 @@ Today a `Base` pod silently mounts the `coder` namespace's `default` token; it g
 
 It carries `moved {}` blocks for every resource and module that changes address, so existing workspaces migrate their state instead of destroying and recreating their home volumes.
 
-### `templates/K3s-Readonly/`
+### `templates/K3s-Readonly/` (superseded by the Analyzer)
 
 - Namespace `coder`, ServiceAccount `coder-ws-reader`, token automounted.
 - A `coder_script` writes `~/.kube/config` whose user reads the mounted token by `tokenFile`, so rotation keeps working, giving `kubectl`, `flux` and `helm` one explicit context.
