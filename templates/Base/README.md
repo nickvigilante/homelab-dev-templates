@@ -1,6 +1,7 @@
 # Base
 
 The foundational Coder Kubernetes workspace template.
+Its pod, home volume, agent, dotfiles and Claude Code setup come from the shared module in `modules/workspace/`; this directory holds only the parameters, the git identity and the module call.
 Runs workspace pods in the `coder` namespace on gandalf's k3s cluster,
 pinned to the amd64 node via `node_selector`
 (this cluster also has arm64 Pi worker nodes;
@@ -19,8 +20,8 @@ which is allowed because `memory` is mutable.
 ## Git identity
 
 Commits made in a workspace are authored as `Nick Vigilante <nickvigilante@users.noreply.github.com>`.
-`main.tf` sets `GIT_AUTHOR_*` and `GIT_COMMITTER_*` on the agent, and git ranks those above `user.name` and `user.email` in any config file.
-`dotfiles.sh` passes the same values to chezmoi on first start, so the generated `~/.gitconfig` agrees.
+The shared module sets `GIT_AUTHOR_*` and `GIT_COMMITTER_*` on the agent from the `locals` block in `main.tf`, and git ranks those above `user.name` and `user.email` in any config file.
+The module's `dotfiles.sh` passes the same values to chezmoi on first start, so the generated `~/.gitconfig` agrees.
 
 They are fixed in `main.tf`, not taken from the Coder account, so commits carry the noreply address and not whatever the account uses.
 Change the identity by editing the `locals` block in `main.tf`.
@@ -29,8 +30,12 @@ Because the values come from the agent's environment, a change reaches existing 
 ## Updating
 
 ```bash
-tofu fmt -recursive && tofu validate
-coder templates push Base --directory . -y
+# From the repo root. The push uploads only this directory, so the module
+# must be copied in first. push-template.sh vendors it fresh every time:
+# pushing the directory directly can upload a stale, git-ignored copy.
+scripts/vendor-module.sh templates/Base
+(cd templates/Base && tofu fmt -recursive && tofu init && tofu validate)
+scripts/push-template.sh Base -y
 ```
 
 Merging to `main` with changes under `templates/` pushes and activates the
