@@ -2,12 +2,6 @@
 # every agent, so adding one produced two identical buttons. To open a specific
 # folder, add the module back and set display_apps.vscode = false on the agent.
 
-variable "claude_code_oauth_token" {
-  description = "OAuth token passed to Claude Code via the CLAUDE_CODE_OAUTH_TOKEN env var. Generate one with `claude setup-token`."
-  type        = string
-  default     = ""
-  sensitive   = true
-}
 module "claude-code" {
   count                   = data.coder_workspace.me.start_count
   source                  = "registry.coder.com/coder/claude-code/coder"

@@ -54,7 +54,7 @@ repos:
         files: Dockerfile$
       - id: tofu-fmt
         name: tofu fmt -check
-        entry: tofu fmt -check -diff
+        entry: tofu fmt -check -diff -recursive
         language: system
         files: \.tf$
         pass_filenames: false

@@ -14,3 +14,10 @@ crash.*.log
 
 # Git worktrees (per-session isolated branch work)
 .worktrees/
+
+# Vendored copies of modules/workspace, made by scripts/vendor-module.sh.
+# `coder templates push` does not read this file, so they still upload.
+templates/*/modules/
+
+# The module is locked by each template that vendors it.
+modules/workspace/.terraform.lock.hcl

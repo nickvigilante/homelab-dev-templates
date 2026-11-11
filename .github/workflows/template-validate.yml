@@ -9,7 +9,14 @@ name: template-validate
 on:
   pull_request:
     branches: [main]
-    paths: ['templates/**']
+    paths:
+      - 'templates/**'
+      # Otherwise a change to this workflow alone never runs it.
+      - '.github/workflows/template-validate.yml'
+      - 'modules/workspace/**'
+      - 'scripts/vendor-module.sh'
+      - 'scripts/changed-templates.sh'
+      - 'scripts/template-matrix.sh'
 
 permissions:
   contents: read
@@ -19,9 +26,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
-    name: validate
+  # Which templates this PR affects. A module change affects all of them; see
+  # scripts/changed-templates.sh.
+  changes:
     runs-on: ubuntu-latest
+    outputs:
+      templates: ${{ steps.list.outputs.templates }}
+    steps:
+      # Full history: the diff needs the PR's base commit.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # template-matrix.sh fails on an affected template with no
+      # template.json, so the gap shows on the pull request and not only when
+      # template-push.yml runs on main. Validation needs only the names.
+      - name: List affected templates
+        id: list
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          matrix="$(scripts/template-matrix.sh "$BASE_SHA" HEAD)"
+          templates="$(printf '%s' "$matrix" | jq -c 'map(.template)')"
+          echo "templates=${templates}" >> "$GITHUB_OUTPUT"
+          echo "Affected templates: ${templates}"
+
+  validate:
+    name: validate (${{ matrix.template }})
+    needs: changes
+    if: needs.changes.outputs.templates != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        template: ${{ fromJSON(needs.changes.outputs.templates) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,6 +84,25 @@ jobs:
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
+
+      # Before the tailnet, not after: once Tailscale is up the resolver is
+      # MagicDNS, which tag:ci cannot use for public names either, so fetching
+      # the installer from coder.com fails with `curl: (6) Could not resolve
+      # host`. That broke every live validation from 2026-09-21 on.
+      #
+      # --prefix, and then $GITHUB_PATH, because the installer's default
+      # location depends on who is running it: /usr/local/bin as root, but
+      # ~/.local/bin otherwise, and ~/.local/bin is not on a GitHub-hosted
+      # runner's PATH. Without this the step succeeds and the next one fails
+      # with `coder: command not found`.
+      - name: Install the Coder CLI
+        if: steps.cfg.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          curl -fsSL https://coder.com/install.sh \
+            | sh -s -- --method standalone --prefix "$HOME/.coder"
+          echo "$HOME/.coder/bin" >> "$GITHUB_PATH"
+          "$HOME/.coder/bin/coder" version | head -1
 
       - name: Join the tailnet
         if: steps.cfg.outputs.configured == 'true'
@@ -84,20 +142,6 @@ jobs:
           printf '%s %s\n' "$CODER_TAILNET_IP" "$host" | sudo tee -a /etc/hosts > /dev/null
           echo "Mapped $host -> $CODER_TAILNET_IP"
 
-      # --prefix, and then $GITHUB_PATH, because the installer's default
-      # location depends on who is running it: /usr/local/bin as root, but
-      # ~/.local/bin otherwise, and ~/.local/bin is not on a GitHub-hosted
-      # runner's PATH. Without this the step succeeds and the next one fails
-      # with `coder: command not found`.
-      - name: Install the Coder CLI
-        if: steps.cfg.outputs.configured == 'true'
-        run: |
-          set -euo pipefail
-          curl -fsSL https://coder.com/install.sh \
-            | sh -s -- --method standalone --prefix "$HOME/.coder"
-          echo "$HOME/.coder/bin" >> "$GITHUB_PATH"
-          "$HOME/.coder/bin/coder" version | head -1
-
       - name: Confirm the deployment is reachable
         if: steps.cfg.outputs.configured == 'true'
         env:
@@ -109,6 +153,12 @@ jobs:
       # live. That catches what `tofu validate` structurally cannot — a bad
       # image tag is syntactically fine — and means CI never needs cluster
       # credentials of its own, because the provisioner does the plan.
+      - name: Vendor the shared module
+        if: steps.cfg.outputs.configured == 'true'
+        env:
+          TEMPLATE: ${{ matrix.template }}
+        run: scripts/vendor-module.sh "templates/${TEMPLATE}"
+
       - name: Push a non-activated version
         if: steps.cfg.outputs.configured == 'true'
         env:
@@ -119,10 +169,12 @@ jobs:
           # expansion into a shell command is the shape that gets copied to a
           # field that can -- a PR title, a branch name -- so it is avoided.
           PR_NUMBER: ${{ github.event.number }}
+          # A directory name, which a fork PR controls: env, never inline.
+          TEMPLATE: ${{ matrix.template }}
         run: |
           set -euo pipefail
-          coder templates push Base \
-            --directory templates/Base \
+          coder templates push "$TEMPLATE" \
+            --directory "templates/${TEMPLATE}" \
             --name "pr-${PR_NUMBER}-$(git rev-parse --short HEAD)" \
             --activate=false \
             --yes

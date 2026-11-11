@@ -13,7 +13,12 @@ name: template-push
 on:
   push:
     branches: [main]
-    paths: ['templates/**']
+    paths:
+      - 'templates/**'
+      - 'modules/workspace/**'
+      - 'scripts/vendor-module.sh'
+      - 'scripts/changed-templates.sh'
+      - 'scripts/template-matrix.sh'
 
 permissions:
   contents: read
@@ -25,8 +30,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Which templates this merge affects, each with its template.json metadata.
+  # Runs on a GitHub-hosted runner, which has jq; the in-cluster runner then
+  # only needs the values it is handed.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      templates: ${{ steps.list.outputs.templates }}
+    steps:
+      # Full history: the diff needs the commit before this push.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Every template must carry a template.json; template-matrix.sh fails
+      # the job on a missing one rather than pushing a template without its
+      # metadata.
+      - name: List affected templates
+        id: list
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          templates="$(scripts/template-matrix.sh "$BEFORE_SHA" HEAD)"
+          echo "templates=${templates}" >> "$GITHUB_OUTPUT"
+          echo "Affected templates: ${templates}"
+
   push:
-    name: push
+    name: push (${{ matrix.template }})
+    needs: changes
+    if: needs.changes.outputs.templates != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.changes.outputs.templates) }}
     runs-on: arc-runner-set
     # A missing or unhealthy runner leaves the job queued indefinitely rather
     # than failing, which looks identical to "nothing was merged". Fail instead.
@@ -48,31 +85,40 @@ jobs:
           echo "$HOME/.coder/bin" >> "$GITHUB_PATH"
           "$HOME/.coder/bin/coder" version | head -1
 
+      - name: Vendor the shared module
+        env:
+          TEMPLATE: ${{ matrix.template }}
+        run: scripts/vendor-module.sh "templates/${TEMPLATE}"
+
       - name: Activate the template
         env:
           CODER_URL: ${{ secrets.CODER_URL }}
           CODER_SESSION_TOKEN: ${{ secrets.CODER_SESSION_TOKEN }}
+          TEMPLATE: ${{ matrix.template }}
         run: |
           set -euo pipefail
-          coder templates push Base \
-            --directory templates/Base \
+          coder templates push "$TEMPLATE" \
+            --directory "templates/${TEMPLATE}" \
             --name "main-$(git rev-parse --short HEAD)" \
             --yes
 
       # The icon is template metadata, not part of a version, so `templates
-      # push` cannot set it. Re-stating it on every push keeps it declared
-      # here rather than living only in the dashboard. 1f9f1 is the bricks
-      # emoji, for the template the others build on. It ships with Coder, as
-      # does any other /emojis/*.png or /icon/*.svg path; avoid the /icon/
-      # ones named after a product, which read as that product's template.
+      # push` cannot set it. Re-stating it on every push keeps it declared in
+      # the template's template.json rather than living only in the
+      # dashboard. Any /emojis/*.png or /icon/*.svg path ships with Coder;
+      # avoid the /icon/ ones named after a product, which read as that
+      # product's template.
       - name: Set the template icon
         env:
           CODER_URL: ${{ secrets.CODER_URL }}
           CODER_SESSION_TOKEN: ${{ secrets.CODER_SESSION_TOKEN }}
-        run: coder templates edit Base --icon /emojis/1f9f1.png
+          TEMPLATE: ${{ matrix.template }}
+          ICON: ${{ matrix.icon }}
+        run: coder templates edit "$TEMPLATE" --icon "$ICON"
 
       - name: Report the active version
         env:
           CODER_URL: ${{ secrets.CODER_URL }}
           CODER_SESSION_TOKEN: ${{ secrets.CODER_SESSION_TOKEN }}
-        run: coder templates versions list Base | head -5
+          TEMPLATE: ${{ matrix.template }}
+        run: coder templates versions list "$TEMPLATE" | head -5
