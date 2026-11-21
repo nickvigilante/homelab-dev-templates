@@ -45,8 +45,9 @@ why that workflow is deliberately push-only.
 
 Pull requests are validated first by `.github/workflows/template-validate.yml`,
 which pushes a non-activated version so the Coder provisioner checks it
-server-side. Fork PRs skip that check: they receive no secrets, so it reports
-and skips rather than failing.
+server-side. The job joins the tailnet as an ephemeral `tag:ci` node to reach
+Coder, which is not publicly reachable. Fork PRs skip that check: they receive
+no secrets, so it reports and skips rather than failing.
 
 Bumping the image is a second manual step: `image` in `main.tf` pins a full
 SHA, so a freshly built image is not used until that string is updated.
