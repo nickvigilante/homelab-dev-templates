@@ -62,7 +62,7 @@ error: kubectl cannot reach a cluster.
   KUBECONFIG=${KUBECONFIG:-<unset>}
 
 The homelab API server is published on the tailnet as
-gandalf.tail395fc0.ts.net:6443, so reaching it needs BOTH:
+gandalf.tail8982c5.ts.net:6443, so reaching it needs BOTH:
 
   1. Tailscale connected        -- check with: tailscale status
   2. KUBECONFIG pointing at the homelab config
