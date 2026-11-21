@@ -6,6 +6,14 @@ name: template-validate
 # self-hosted in-cluster runner: this repository is public, and a pull_request
 # job executes the PR's own code. Delivery lives in template-push.yml, which is
 # push-only for exactly that reason. See docs/runner-setup.md.
+#
+# This is a structural check only: it fails an affected template that has no
+# template.json. There is deliberately no live validation against Coder here.
+# That needed a CI node on the tailnet, and Tailnet Lock correctly refuses a
+# node that no signing node has signed. A Tailscale credential in this public
+# repository's secrets would be exactly the foothold the lock exists to close.
+# Run the provisioner-side check from a machine that is already on the
+# tailnet instead; see docs/runner-setup.md.
 on:
   pull_request:
     branches: [main]
@@ -30,8 +38,6 @@ jobs:
   # scripts/changed-templates.sh.
   changes:
     runs-on: ubuntu-latest
-    outputs:
-      templates: ${{ steps.list.outputs.templates }}
     steps:
       # Full history: the diff needs the PR's base commit.
       - uses: actions/checkout@v4
@@ -40,142 +46,11 @@ jobs:
           persist-credentials: false
       # template-matrix.sh fails on an affected template with no
       # template.json, so the gap shows on the pull request and not only when
-      # template-push.yml runs on main. Validation needs only the names.
+      # template-push.yml runs on main.
       - name: List affected templates
-        id: list
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
           matrix="$(scripts/template-matrix.sh "$BASE_SHA" HEAD)"
-          templates="$(printf '%s' "$matrix" | jq -c 'map(.template)')"
-          echo "templates=${templates}" >> "$GITHUB_OUTPUT"
-          echo "Affected templates: ${templates}"
-
-  validate:
-    name: validate (${{ matrix.template }})
-    needs: changes
-    if: needs.changes.outputs.templates != '[]'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        template: ${{ fromJSON(needs.changes.outputs.templates) }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      # Fork PRs receive no secrets, and the tailnet/Coder credentials may not
-      # be provisioned yet. Report and skip rather than fail: a red check for
-      # "not configured" is indistinguishable from a red check for "the
-      # template is broken", which is the signal this job exists to give.
-      - name: Check whether live validation is configured
-        id: cfg
-        env:
-          TS_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          CODER_URL: ${{ secrets.CODER_URL }}
-          CODER_TAILNET_IP: ${{ vars.CODER_TAILNET_IP }}
-        run: |
-          set -euo pipefail
-          if [ -z "${TS_ID}" ] || [ -z "${CODER_URL}" ] || [ -z "${CODER_TAILNET_IP}" ]; then
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Tailscale/Coder secrets or CODER_TAILNET_IP absent — skipping live validation. Fork PRs always land here."
-          else
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Before the tailnet, not after: once Tailscale is up the resolver is
-      # MagicDNS, which tag:ci cannot use for public names either, so fetching
-      # the installer from coder.com fails with `curl: (6) Could not resolve
-      # host`. That broke every live validation from 2026-09-21 on.
-      #
-      # --prefix, and then $GITHUB_PATH, because the installer's default
-      # location depends on who is running it: /usr/local/bin as root, but
-      # ~/.local/bin otherwise, and ~/.local/bin is not on a GitHub-hosted
-      # runner's PATH. Without this the step succeeds and the next one fails
-      # with `coder: command not found`.
-      - name: Install the Coder CLI
-        if: steps.cfg.outputs.configured == 'true'
-        run: |
-          set -euo pipefail
-          curl -fsSL https://coder.com/install.sh \
-            | sh -s -- --method standalone --prefix "$HOME/.coder"
-          echo "$HOME/.coder/bin" >> "$GITHUB_PATH"
-          "$HOME/.coder/bin/coder" version | head -1
-
-      - name: Join the tailnet
-        if: steps.cfg.outputs.configured == 'true'
-        uses: tailscale/github-action@v3
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-
-      # Resolution, not routing, is what fails without this. The observed error
-      # is `curl: (28) Resolving timed out`, a hang rather than a refusal:
-      # coder.vigihome.net has no public record, and after the Tailscale action
-      # runs the resolver is MagicDNS, whose split-DNS lookup for vigihome.net
-      # would need an internal resolver on port 53 that tag:ci is not granted.
-      # The query has nowhere to go.
-      #
-      # Widening the ACL to reach that resolver is the alternative, and is not
-      # taken: keeping tag:ci scoped to one host on one port is most of the value
-      # of validating from a throwaway node.
-      #
-      # Map it in /etc/hosts rather than using curl --resolve, because the coder
-      # CLI needs it too and has no equivalent flag; a curl-only fix would just
-      # move the failure to the push step.
-      #
-      # The address is a repository variable rather than a literal so the tailnet
-      # topology is not baked into a public workflow, and so a re-addressed host
-      # is one setting away rather than a commit. It changed once already,
-      # when the homelab moved to a new tailnet.
-      - name: Resolve the deployment to its tailnet address
-        if: steps.cfg.outputs.configured == 'true'
-        env:
-          CODER_URL: ${{ secrets.CODER_URL }}
-          CODER_TAILNET_IP: ${{ vars.CODER_TAILNET_IP }}
-        run: |
-          set -euo pipefail
-          host="$(printf '%s' "$CODER_URL" | sed -E 's#^[a-z]+://##; s#[:/].*$##')"
-          [ -n "$host" ] || { echo "::error::could not parse a hostname out of CODER_URL"; exit 1; }
-          printf '%s %s\n' "$CODER_TAILNET_IP" "$host" | sudo tee -a /etc/hosts > /dev/null
-          echo "Mapped $host -> $CODER_TAILNET_IP"
-
-      - name: Confirm the deployment is reachable
-        if: steps.cfg.outputs.configured == 'true'
-        env:
-          CODER_URL: ${{ secrets.CODER_URL }}
-        run: curl -fsS --max-time 10 "$CODER_URL/healthz"
-
-      # --activate=false makes the Coder provisioner run the Terraform import
-      # server-side and reject anything malformed, without making the version
-      # live. That catches what `tofu validate` structurally cannot — a bad
-      # image tag is syntactically fine — and means CI never needs cluster
-      # credentials of its own, because the provisioner does the plan.
-      - name: Vendor the shared module
-        if: steps.cfg.outputs.configured == 'true'
-        env:
-          TEMPLATE: ${{ matrix.template }}
-        run: scripts/vendor-module.sh "templates/${TEMPLATE}"
-
-      - name: Push a non-activated version
-        if: steps.cfg.outputs.configured == 'true'
-        env:
-          CODER_URL: ${{ secrets.CODER_URL }}
-          CODER_SESSION_TOKEN: ${{ secrets.CODER_SESSION_TOKEN }}
-          # Passed via env rather than expanded inline in run:. This value is
-          # a GitHub-assigned integer and cannot carry a payload, but inline
-          # expansion into a shell command is the shape that gets copied to a
-          # field that can -- a PR title, a branch name -- so it is avoided.
-          PR_NUMBER: ${{ github.event.number }}
-          # A directory name, which a fork PR controls: env, never inline.
-          TEMPLATE: ${{ matrix.template }}
-        run: |
-          set -euo pipefail
-          coder templates push "$TEMPLATE" \
-            --directory "templates/${TEMPLATE}" \
-            --name "pr-${PR_NUMBER}-$(git rev-parse --short HEAD)" \
-            --activate=false \
-            --yes
+          echo "Affected templates: $(printf '%s' "$matrix" | jq -c 'map(.template)')"

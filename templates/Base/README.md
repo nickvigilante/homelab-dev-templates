@@ -43,11 +43,11 @@ template via `.github/workflows/template-push.yml`, which runs on the
 self-hosted runner inside the cluster. See `docs/runner-setup.md`, including
 why that workflow is deliberately push-only.
 
-Pull requests are validated first by `.github/workflows/template-validate.yml`,
-which pushes a non-activated version so the Coder provisioner checks it
-server-side. The job joins the tailnet as an ephemeral `tag:ci` node to reach
-Coder, which is not publicly reachable. Fork PRs skip that check: they receive
-no secrets, so it reports and skips rather than failing.
+Pull requests get a structural check from `.github/workflows/template-validate.yml`.
+The provisioner-side check, which catches what `tofu validate` cannot (a bad
+image tag is syntactically fine), does not run in CI, because that would need a
+CI node on the tailnet. Run it yourself from a machine on the tailnet before
+merging; `docs/runner-setup.md` has the commands.
 
 Bumping the image is a second manual step: `image` in `main.tf` pins a full
 SHA, so a freshly built image is not used until that string is updated.

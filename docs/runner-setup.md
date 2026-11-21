@@ -16,10 +16,21 @@ A workflow triggered by `pull_request` runs code from the pull request's branch,
 
 Because this runner lives inside the k3s cluster, a `pull_request` trigger here would let any stranger execute arbitrary code on the cluster control plane, alongside every workspace PVC — and, per the dotfiles kubeconfig gate, potentially alongside a cluster-admin credential.
 
-PR-time validation lives in `.github/workflows/template-validate.yml`, which runs on a GitHub-hosted runner joined to the tailnet as an ephemeral node, and pushes a **non-activated** template version so the Coder provisioner validates it server-side.
+PR-time checking lives in `.github/workflows/template-validate.yml`, which runs on a GitHub-hosted runner and does a structural check only.
+It holds no Tailscale or Coder credential.
+A CI node that joins the tailnet would have to be signed by a signing node once Tailnet Lock is on, and a credential that lets GitHub add nodes is the foothold the lock exists to close.
+
+For the provisioner-side check, push a **non-activated** version from a machine already on the tailnet, before merging:
+
+```bash
+scripts/vendor-module.sh templates/Base
+scripts/push-template.sh Base --activate=false --name "check-$(git rev-parse --short HEAD)" --yes
+```
+
+The Coder provisioner runs the Terraform import server-side and rejects anything malformed, without making the version live.
 
 **There is never a reason to add `pull_request` to `template-push.yml`.**
-If PR-time checks need to grow, they grow in `template-validate.yml`.
+If PR-time checks need to grow, they grow in `template-validate.yml`, and they must not need a tailnet credential.
 
 ## Install
 
@@ -84,7 +95,8 @@ kubectl run coder-reach-check --rm -it --restart=Never \
 
 ## Secrets
 
-Both workflows read `CODER_URL` and `CODER_SESSION_TOKEN`; `template-validate.yml` also reads `TS_OAUTH_CLIENT_ID` and `TS_OAUTH_SECRET`.
+`template-push.yml` reads `CODER_URL` and `CODER_SESSION_TOKEN`.
+No workflow reads a Tailscale credential.
 
 The Coder token belongs to a dedicated `ci-template-push` user holding `organization-template-admin`, not to a personal account.
 That role carries 23 organization permissions, zero site permissions and zero user permissions.
