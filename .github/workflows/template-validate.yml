@@ -129,7 +129,8 @@ jobs:
       #
       # The address is a repository variable rather than a literal so the tailnet
       # topology is not baked into a public workflow, and so a re-addressed host
-      # is one setting away rather than a commit.
+      # is one setting away rather than a commit. It changed once already,
+      # when the homelab moved to a new tailnet.
       - name: Resolve the deployment to its tailnet address
         if: steps.cfg.outputs.configured == 'true'
         env:

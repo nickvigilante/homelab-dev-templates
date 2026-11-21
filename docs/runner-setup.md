@@ -1,12 +1,12 @@
 # Self-hosted runner
 
 `template-push.yml` runs on a self-hosted runner inside the k3s cluster.
-It has to: `coder.vigihome.net` resolves only to `192.168.50.135` and `100.92.2.25`, neither routable from a GitHub-hosted runner.
+It has to: `coder.vigihome.net` resolves only to `192.168.50.135` and `100.71.63.31`, neither routable from a GitHub-hosted runner.
 
 ```console
 $ getent hosts coder.vigihome.net
 192.168.50.135  coder.vigihome.net
-100.92.2.25     coder.vigihome.net
+100.71.63.31    coder.vigihome.net
 ```
 
 ## Why `template-push.yml` has no `pull_request` trigger
